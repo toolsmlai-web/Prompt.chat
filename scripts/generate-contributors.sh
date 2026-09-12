@@ -101,9 +101,17 @@ def parse_contributors(field):
 
 def make_email(name):
     """Build an email — don't double-suffix if the contributor is already an email."""
-    if '@' in name:
-        return name
-    return f'{name}@users.noreply.github.com'
+    normalized = re.sub(r'[\r\n<>\s]', '', name or '').lstrip('@')
+    if EMAIL_RE.fullmatch(normalized):
+        return normalized
+    if GITHUB_USERNAME_RE.fullmatch(normalized):
+        return f'{normalized}@users.noreply.github.com'
+    return 'github-actions[bot]@users.noreply.github.com'
+
+def make_author_name(name):
+    """Keep malformed contributor data from breaking git commit metadata."""
+    normalized = re.sub(r'[\r\n<>]', ' ', name or '').strip()
+    return normalized or 'github-actions[bot]'
 
 def build_commit_msg(action, act, co_authors):
     msg = f'{action} prompt: {act}'
@@ -118,14 +126,16 @@ def git_commit(author_name, author_email, message):
     subprocess.run(['git', 'add', csv_file, prompts_md_path], check=True)
     if subprocess.run(['git', 'diff', '--cached', '--quiet'], capture_output=True).returncode == 0:
         return False
+    safe_author_name = make_author_name(author_name)
+    safe_author_email = make_email(author_email)
     env = os.environ.copy()
-    env['GIT_AUTHOR_NAME'] = author_name
-    env['GIT_AUTHOR_EMAIL'] = author_email
-    env['GIT_COMMITTER_NAME'] = author_name
-    env['GIT_COMMITTER_EMAIL'] = author_email
+    env['GIT_AUTHOR_NAME'] = safe_author_name
+    env['GIT_AUTHOR_EMAIL'] = safe_author_email
+    env['GIT_COMMITTER_NAME'] = safe_author_name
+    env['GIT_COMMITTER_EMAIL'] = safe_author_email
     subprocess.run([
         'git', 'commit', '-m', message,
-        f'--author={author_name} <{author_email}>'
+        f'--author={safe_author_name} <{safe_author_email}>'
     ], env=env, check=True)
     return True
 

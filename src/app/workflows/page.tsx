@@ -135,7 +135,14 @@ export default async function WorkflowsPage({ searchParams }: WorkflowsPageProps
     orderBy = { votes: { _count: "desc" } };
   }
 
-  const result = await getCachedWorkflows(orderBy, perPage, params.q);
+  type WorkflowsResult = Awaited<ReturnType<typeof getCachedWorkflows>>;
+  let result: WorkflowsResult = { workflows: [], total: 0 };
+  try {
+    result = await getCachedWorkflows(orderBy, perPage, params.q);
+  } catch (error) {
+    console.error("[workflows] Unable to load workflows", error);
+  }
+
   const workflows = result.workflows;
   const total = result.total;
 
